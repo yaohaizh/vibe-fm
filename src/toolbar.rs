@@ -19,6 +19,8 @@ pub enum ToolbarAction {
     SwapPanels,
     Search,
     Settings,
+    Bookmarks,
+    AddBookmark,
 }
 
 pub enum ToolbarEvent {
@@ -151,6 +153,28 @@ impl Render for Toolbar {
             .child(
                 h_flex()
                     .gap_0p5()
+                    .child(
+                        Button::new("tb-bookmarks")
+                            .icon(IconName::Star)
+                            .ghost()
+                            .compact()
+                            .small()
+                            .tooltip("Bookmarks (Ctrl+B)")
+                            .on_click(cx.listener(|_, _, _, cx| {
+                                cx.emit(ToolbarEvent::Action(ToolbarAction::Bookmarks));
+                            })),
+                    )
+                    .child(
+                        Button::new("tb-add-bookmark")
+                            .icon(IconName::Plus)
+                            .ghost()
+                            .compact()
+                            .small()
+                            .tooltip("Add Bookmark (Ctrl+D)")
+                            .on_click(cx.listener(|_, _, _, cx| {
+                                cx.emit(ToolbarEvent::Action(ToolbarAction::AddBookmark));
+                            })),
+                    )
                     .child(
                         Button::new("tb-search")
                             .icon(IconName::Search)
