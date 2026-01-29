@@ -1,4 +1,3 @@
-mod bookmarks_bar;
 mod drive_selector;
 mod file_entry;
 mod file_manager;

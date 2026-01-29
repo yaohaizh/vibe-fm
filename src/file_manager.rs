@@ -1,4 +1,3 @@
-use crate::bookmarks_bar::{BookmarksBar, BookmarksBarEvent};
 use crate::drive_selector::{DriveSelector, DriveSelectorEvent, PanelSide};
 use crate::file_entry::FileEntry;
 use crate::file_panel::{FilePanel, FilePanelEvent};
@@ -38,9 +37,6 @@ actions!(
         // Filter
         ShowFilter,
         ClearFilter,
-        // Bookmarks
-        ToggleBookmarks,
-        AddBookmark,
     ]
 );
 
@@ -74,9 +70,6 @@ pub fn register_keybindings(cx: &mut App) {
         // Filter
         KeyBinding::new("ctrl-f", ShowFilter, Some("FileManager")),
         KeyBinding::new("escape", ClearFilter, Some("FileManager")),
-        // Bookmarks
-        KeyBinding::new("ctrl-b", ToggleBookmarks, Some("FileManager")),
-        KeyBinding::new("ctrl-d", AddBookmark, Some("FileManager")),
     ]);
 }
 
@@ -87,7 +80,6 @@ pub struct FileManager {
     status_bar: Entity<StatusBar>,
     function_bar: Entity<FunctionBar>,
     filter_bar: Entity<FilterBar>,
-    bookmarks_bar: Entity<BookmarksBar>,
     left_drive_selector: Entity<DriveSelector>,
     right_drive_selector: Entity<DriveSelector>,
     active_panel: ActivePanel,
@@ -118,7 +110,6 @@ impl FileManager {
         let status_bar = cx.new(|_cx| StatusBar::new());
         let function_bar = cx.new(|_cx| FunctionBar::new());
         let filter_bar = cx.new(|cx| FilterBar::new(cx));
-        let bookmarks_bar = cx.new(|cx| BookmarksBar::new(cx));
         let left_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Left));
         let right_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Right));
 
@@ -130,8 +121,6 @@ impl FileManager {
         cx.subscribe(&function_bar, Self::on_function_bar_event)
             .detach();
         cx.subscribe(&filter_bar, Self::on_filter_bar_event)
-            .detach();
-        cx.subscribe(&bookmarks_bar, Self::on_bookmarks_bar_event)
             .detach();
         cx.subscribe(&left_drive_selector, Self::on_drive_selected)
             .detach();
@@ -151,7 +140,6 @@ impl FileManager {
             status_bar,
             function_bar,
             filter_bar,
-            bookmarks_bar,
             left_drive_selector,
             right_drive_selector,
             active_panel: ActivePanel::Left,
@@ -297,34 +285,6 @@ impl FileManager {
         });
     }
 
-    fn handle_toggle_bookmarks(
-        &mut self,
-        _: &ToggleBookmarks,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.bookmarks_bar.update(cx, |bar, cx| {
-            bar.toggle(cx);
-        });
-    }
-
-    fn handle_add_bookmark(
-        &mut self,
-        _: &AddBookmark,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let path = self.active_panel_entity().read(cx).current_path().clone();
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| path.to_string_lossy().to_string());
-
-        self.bookmarks_bar.update(cx, |bar, cx| {
-            bar.add_bookmark(name, path, cx);
-        });
-    }
-
     fn on_left_panel_event(
         &mut self,
         _panel: Entity<FilePanel>,
@@ -409,21 +369,6 @@ impl FileManager {
                 ToolbarAction::SwapPanels => self.swap_panels(cx),
                 ToolbarAction::Search => {}
                 ToolbarAction::Settings => {}
-                ToolbarAction::Bookmarks => {
-                    self.bookmarks_bar.update(cx, |bar, cx| {
-                        bar.toggle(cx);
-                    });
-                }
-                ToolbarAction::AddBookmark => {
-                    let path = self.active_panel_entity().read(cx).current_path().clone();
-                    let name = path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_else(|| path.to_string_lossy().to_string());
-                    self.bookmarks_bar.update(cx, |bar, cx| {
-                        bar.add_bookmark(name, path, cx);
-                    });
-                }
             },
         }
     }
@@ -486,25 +431,6 @@ impl FileManager {
             }
             FilterBarEvent::Dismissed => {
                 // Filter bar was closed
-            }
-        }
-    }
-
-    fn on_bookmarks_bar_event(
-        &mut self,
-        _bar: Entity<BookmarksBar>,
-        event: &BookmarksBarEvent,
-        cx: &mut Context<Self>,
-    ) {
-        match event {
-            BookmarksBarEvent::BookmarkSelected(path) => {
-                // Navigate active panel to the selected bookmark
-                self.active_panel_entity().update(cx, |panel, cx| {
-                    panel.navigate_to(path.clone(), cx);
-                });
-            }
-            BookmarksBarEvent::Dismissed => {
-                // Bookmarks bar was closed
             }
         }
     }
@@ -775,8 +701,6 @@ impl Render for FileManager {
             .on_action(cx.listener(Self::handle_exit))
             .on_action(cx.listener(Self::handle_show_filter))
             .on_action(cx.listener(Self::handle_clear_filter))
-            .on_action(cx.listener(Self::handle_toggle_bookmarks))
-            .on_action(cx.listener(Self::handle_add_bookmark))
             .track_focus(&self.focus_handle)
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
@@ -784,46 +708,38 @@ impl Render for FileManager {
             .child(self.toolbar.clone())
             // Filter bar (shown when active)
             .child(self.filter_bar.clone())
-            // Main content area with bookmarks sidebar and dual panels
+            // Main content area with dual panels
             .child(
                 h_flex()
                     .flex_1()
+                    .gap_2()
+                    .p_2()
                     .overflow_hidden()
-                    // Bookmarks sidebar (on the left, when visible)
-                    .child(self.bookmarks_bar.clone())
-                    // Dual panels container
+                    // Left panel container (drive selector + file panel)
                     .child(
-                        h_flex()
+                        v_flex()
                             .flex_1()
-                            .gap_2()
-                            .p_2()
+                            .size_full()
                             .overflow_hidden()
-                            // Left panel container (drive selector + file panel)
-                            .child(
-                                v_flex()
-                                    .flex_1()
-                                    .size_full()
-                                    .overflow_hidden()
-                                    .border_1()
-                                    .border_color(left_border_color)
-                                    .rounded_md()
-                                    .bg(cx.theme().background)
-                                    .child(self.left_drive_selector.clone())
-                                    .child(self.left_panel.clone()),
-                            )
-                            // Right panel container (drive selector + file panel)
-                            .child(
-                                v_flex()
-                                    .flex_1()
-                                    .size_full()
-                                    .overflow_hidden()
-                                    .border_1()
-                                    .border_color(right_border_color)
-                                    .rounded_md()
-                                    .bg(cx.theme().background)
-                                    .child(self.right_drive_selector.clone())
-                                    .child(self.right_panel.clone()),
-                            ),
+                            .border_1()
+                            .border_color(left_border_color)
+                            .rounded_md()
+                            .bg(cx.theme().background)
+                            .child(self.left_drive_selector.clone())
+                            .child(self.left_panel.clone()),
+                    )
+                    // Right panel container (drive selector + file panel)
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .size_full()
+                            .overflow_hidden()
+                            .border_1()
+                            .border_color(right_border_color)
+                            .rounded_md()
+                            .bg(cx.theme().background)
+                            .child(self.right_drive_selector.clone())
+                            .child(self.right_panel.clone()),
                     ),
             )
             // Status bar at bottom
