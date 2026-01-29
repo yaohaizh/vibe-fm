@@ -727,10 +727,10 @@ impl FileManager {
     }
 
     fn show_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Update dialog with current settings before showing
+        // Show dialog with current settings
+        let settings = self.settings.clone();
         self.settings_dialog.update(cx, |dialog, cx| {
-            dialog.update_settings(self.settings.clone(), cx);
-            dialog.show(window, cx);
+            dialog.show(settings, window, cx);
         });
     }
 

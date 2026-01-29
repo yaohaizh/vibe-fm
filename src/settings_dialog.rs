@@ -29,17 +29,12 @@ impl SettingsDialog {
         }
     }
 
-    pub fn show(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Store original settings so we can revert on cancel
-        self.original_settings = self.settings.clone();
-        self.visible = true;
-        self.focus_handle.focus(window);
-        cx.notify();
-    }
-
-    pub fn update_settings(&mut self, settings: AppSettings, cx: &mut Context<Self>) {
+    pub fn show(&mut self, settings: AppSettings, window: &mut Window, cx: &mut Context<Self>) {
+        // Update settings and store original so we can revert on cancel
         self.settings = settings.clone();
         self.original_settings = settings;
+        self.visible = true;
+        self.focus_handle.focus(window);
         cx.notify();
     }
 
