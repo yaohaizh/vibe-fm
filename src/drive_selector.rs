@@ -137,3 +137,111 @@ impl Render for DriveSelector {
             }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{DriveInfo, DriveSelector, PanelSide};
+    use std::path::PathBuf;
+
+    // ==================== PanelSide Tests ====================
+
+    #[test]
+    fn test_panel_side_equality() {
+        assert_eq!(PanelSide::Left, PanelSide::Left);
+        assert_eq!(PanelSide::Right, PanelSide::Right);
+        assert_ne!(PanelSide::Left, PanelSide::Right);
+    }
+
+    #[test]
+    fn test_panel_side_copy() {
+        let side = PanelSide::Left;
+        let copied = side;
+        assert_eq!(side, copied);
+    }
+
+    // ==================== DriveInfo Tests ====================
+
+    #[test]
+    fn test_drive_info_creation() {
+        let drive = DriveInfo {
+            path: PathBuf::from("C:\\"),
+            name: "C:".to_string(),
+            label: Some("Local Disk".to_string()),
+        };
+
+        assert_eq!(drive.path, PathBuf::from("C:\\"));
+        assert_eq!(drive.name, "C:");
+        assert_eq!(drive.label, Some("Local Disk".to_string()));
+    }
+
+    #[test]
+    fn test_drive_info_without_label() {
+        let drive = DriveInfo {
+            path: PathBuf::from("/"),
+            name: "/".to_string(),
+            label: None,
+        };
+
+        assert_eq!(drive.path, PathBuf::from("/"));
+        assert_eq!(drive.name, "/");
+        assert!(drive.label.is_none());
+    }
+
+    #[test]
+    fn test_drive_info_clone() {
+        let drive = DriveInfo {
+            path: PathBuf::from("/home"),
+            name: "~".to_string(),
+            label: Some("Home".to_string()),
+        };
+
+        let cloned = drive.clone();
+        assert_eq!(cloned.path, drive.path);
+        assert_eq!(cloned.name, drive.name);
+        assert_eq!(cloned.label, drive.label);
+    }
+
+    // ==================== get_drives Tests ====================
+
+    #[test]
+    fn test_get_drives_returns_non_empty() {
+        let drives = DriveSelector::get_drives();
+        // On any system, there should be at least one drive/mount point
+        assert!(!drives.is_empty());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_get_drives_windows_format() {
+        let drives = DriveSelector::get_drives();
+
+        // All Windows drives should have names in format "X:"
+        for drive in &drives {
+            assert!(drive.name.len() == 2);
+            assert!(drive.name.ends_with(':'));
+            assert!(drive.name.chars().next().unwrap().is_ascii_uppercase());
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn test_get_drives_unix_has_root() {
+        let drives = DriveSelector::get_drives();
+
+        // Unix systems should always have root
+        let has_root = drives.iter().any(|d| d.path == PathBuf::from("/"));
+        assert!(has_root);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn test_get_drives_unix_has_home() {
+        let drives = DriveSelector::get_drives();
+
+        // Should have home directory if it exists
+        if dirs::home_dir().is_some() {
+            let has_home = drives.iter().any(|d| d.name == "~");
+            assert!(has_home);
+        }
+    }
+}

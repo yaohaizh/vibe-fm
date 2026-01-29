@@ -1,5 +1,6 @@
 use crate::drive_selector::{DriveSelector, DriveSelectorEvent, PanelSide};
 use crate::file_entry::FileEntry;
+use crate::file_ops;
 use crate::file_panel::{FilePanel, FilePanelEvent};
 use crate::filter_bar::{FilterBar, FilterBarEvent};
 use crate::function_bar::{FunctionBar, FunctionBarAction, FunctionBarEvent};
@@ -492,12 +493,12 @@ impl FileManager {
                     }
                 } else {
                     if entry.is_directory() {
-                        if let Err(e) = copy_dir_recursive(source, &dest) {
-                            log::error!("Failed to copy directory {:?}: {}", source, e);
+                        if let Err(e) = file_ops::copy_dir_recursive(&entry.path, &dest) {
+                            log::error!("Failed to copy directory {:?}: {}", entry.path, e);
                         }
                     } else {
-                        if let Err(e) = std::fs::copy(source, &dest) {
-                            log::error!("Failed to copy {:?}: {}", source, e);
+                        if let Err(e) = std::fs::copy(&entry.path, &dest) {
+                            log::error!("Failed to copy {:?}: {}", entry.path, e);
                         }
                     }
                 }
@@ -648,7 +649,7 @@ impl FileManager {
             let dest = target_path.join(&entry.name);
 
             if entry.is_directory() {
-                if let Err(e) = copy_dir_recursive(&entry.path, &dest) {
+                if let Err(e) = file_ops::copy_dir_recursive(&entry.path, &dest) {
                     log::error!("Failed to copy directory {:?}: {}", entry.path, e);
                 }
             } else {
@@ -753,22 +754,4 @@ impl Focusable for FileManager {
     fn focus_handle(&self, _cx: &App) -> FocusHandle {
         self.focus_handle.clone()
     }
-}
-
-fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
-    std::fs::create_dir_all(dst)?;
-
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-
-        if src_path.is_dir() {
-            copy_dir_recursive(&src_path, &dst_path)?;
-        } else {
-            std::fs::copy(&src_path, &dst_path)?;
-        }
-    }
-
-    Ok(())
 }
