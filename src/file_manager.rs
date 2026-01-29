@@ -1,6 +1,7 @@
 use crate::drive_selector::{DriveSelector, DriveSelectorEvent, PanelSide};
 use crate::file_entry::FileEntry;
 use crate::file_panel::{FilePanel, FilePanelEvent};
+use crate::filter_bar::{FilterBar, FilterBarEvent};
 use crate::function_bar::{FunctionBar, FunctionBarAction, FunctionBarEvent};
 use crate::status_bar::{ActivePanel, StatusBar};
 use crate::toolbar::{Toolbar, ToolbarAction, ToolbarEvent};
@@ -33,6 +34,9 @@ actions!(
         Move,
         Rename,
         Exit,
+        // Filter
+        ShowFilter,
+        ClearFilter,
     ]
 );
 
@@ -63,6 +67,9 @@ pub fn register_keybindings(cx: &mut App) {
         KeyBinding::new("f9", Rename, Some("FileManager")),
         KeyBinding::new("f10", Exit, Some("FileManager")),
         KeyBinding::new("alt-f4", Exit, Some("FileManager")),
+        // Filter
+        KeyBinding::new("ctrl-f", ShowFilter, Some("FileManager")),
+        KeyBinding::new("escape", ClearFilter, Some("FileManager")),
     ]);
 }
 
@@ -72,6 +79,7 @@ pub struct FileManager {
     toolbar: Entity<Toolbar>,
     status_bar: Entity<StatusBar>,
     function_bar: Entity<FunctionBar>,
+    filter_bar: Entity<FilterBar>,
     left_drive_selector: Entity<DriveSelector>,
     right_drive_selector: Entity<DriveSelector>,
     active_panel: ActivePanel,
@@ -101,6 +109,7 @@ impl FileManager {
         let toolbar = cx.new(|_cx| Toolbar::new());
         let status_bar = cx.new(|_cx| StatusBar::new());
         let function_bar = cx.new(|_cx| FunctionBar::new());
+        let filter_bar = cx.new(|cx| FilterBar::new(cx));
         let left_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Left));
         let right_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Right));
 
@@ -110,6 +119,8 @@ impl FileManager {
             .detach();
         cx.subscribe(&toolbar, Self::on_toolbar_event).detach();
         cx.subscribe(&function_bar, Self::on_function_bar_event)
+            .detach();
+        cx.subscribe(&filter_bar, Self::on_filter_bar_event)
             .detach();
         cx.subscribe(&left_drive_selector, Self::on_drive_selected)
             .detach();
@@ -128,6 +139,7 @@ impl FileManager {
             toolbar,
             status_bar,
             function_bar,
+            filter_bar,
             left_drive_selector,
             right_drive_selector,
             active_panel: ActivePanel::Left,
@@ -250,6 +262,27 @@ impl FileManager {
 
     fn handle_exit(&mut self, _: &Exit, _window: &mut Window, cx: &mut Context<Self>) {
         cx.quit();
+    }
+
+    fn handle_show_filter(&mut self, _: &ShowFilter, window: &mut Window, cx: &mut Context<Self>) {
+        self.filter_bar.update(cx, |bar, cx| {
+            bar.show(window, cx);
+        });
+    }
+
+    fn handle_clear_filter(
+        &mut self,
+        _: &ClearFilter,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.filter_bar.update(cx, |bar, cx| {
+            bar.hide(cx);
+        });
+        // Clear filter on active panel
+        self.active_panel_entity().update(cx, |panel, cx| {
+            panel.clear_filter(cx);
+        });
     }
 
     fn on_left_panel_event(
@@ -376,6 +409,29 @@ impl FileManager {
                 FunctionBarAction::Rename => self.rename_selected(cx),
                 FunctionBarAction::Exit => cx.quit(),
             },
+        }
+    }
+
+    fn on_filter_bar_event(
+        &mut self,
+        _bar: Entity<FilterBar>,
+        event: &FilterBarEvent,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            FilterBarEvent::FilterChanged(text) => {
+                self.active_panel_entity().update(cx, |panel, cx| {
+                    panel.set_filter(text.clone(), cx);
+                });
+            }
+            FilterBarEvent::FilterCleared => {
+                self.active_panel_entity().update(cx, |panel, cx| {
+                    panel.clear_filter(cx);
+                });
+            }
+            FilterBarEvent::Dismissed => {
+                // Filter bar was closed
+            }
         }
     }
 
@@ -643,11 +699,15 @@ impl Render for FileManager {
             .on_action(cx.listener(Self::handle_move))
             .on_action(cx.listener(Self::handle_rename))
             .on_action(cx.listener(Self::handle_exit))
+            .on_action(cx.listener(Self::handle_show_filter))
+            .on_action(cx.listener(Self::handle_clear_filter))
             .track_focus(&self.focus_handle)
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
             // Toolbar at top
             .child(self.toolbar.clone())
+            // Filter bar (shown when active)
+            .child(self.filter_bar.clone())
             // Main content area with dual panels
             .child(
                 h_flex()

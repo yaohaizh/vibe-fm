@@ -2,6 +2,7 @@ mod drive_selector;
 mod file_entry;
 mod file_manager;
 mod file_panel;
+mod filter_bar;
 mod function_bar;
 mod status_bar;
 mod toolbar;

@@ -32,6 +32,8 @@ pub struct FilePanel {
     id: &'static str,
     current_path: PathBuf,
     entries: Vec<FileEntry>,
+    filtered_entries: Vec<FileEntry>,
+    filter_text: String,
     selected_indices: Vec<usize>,
     last_selected_index: Option<usize>, // For shift+click range selection
     sort_column: SortColumn,
@@ -69,12 +71,15 @@ impl FilePanel {
         cx: &mut Context<Self>,
     ) -> Self {
         let entries = Self::read_directory(&initial_path, true);
+        let filtered_entries = entries.clone();
         let focus_handle = cx.focus_handle();
 
         Self {
             id,
             current_path: initial_path.clone(),
             entries,
+            filtered_entries,
+            filter_text: String::new(),
             selected_indices: vec![],
             last_selected_index: None,
             sort_column: SortColumn::Name,
@@ -133,9 +138,38 @@ impl FilePanel {
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         self.entries = Self::read_directory(&self.current_path, self.show_hidden);
         sort_entries(&mut self.entries, &self.sort_column, &self.sort_order);
+        self.apply_filter();
         self.selected_indices.clear();
         self.last_selected_index = None;
         cx.notify();
+    }
+
+    pub fn set_filter(&mut self, filter: String, cx: &mut Context<Self>) {
+        self.filter_text = filter;
+        self.apply_filter();
+        self.selected_indices.clear();
+        self.last_selected_index = None;
+        cx.notify();
+    }
+
+    pub fn clear_filter(&mut self, cx: &mut Context<Self>) {
+        self.filter_text.clear();
+        self.apply_filter();
+        cx.notify();
+    }
+
+    fn apply_filter(&mut self) {
+        if self.filter_text.is_empty() {
+            self.filtered_entries = self.entries.clone();
+        } else {
+            let filter_lower = self.filter_text.to_lowercase();
+            self.filtered_entries = self
+                .entries
+                .iter()
+                .filter(|e| e.name == ".." || e.name.to_lowercase().contains(&filter_lower))
+                .cloned()
+                .collect();
+        }
     }
 
     pub fn toggle_hidden(&mut self, cx: &mut Context<Self>) {
@@ -155,7 +189,7 @@ impl FilePanel {
     pub fn selected_entries(&self) -> Vec<FileEntry> {
         self.selected_indices
             .iter()
-            .filter_map(|&i| self.entries.get(i).cloned())
+            .filter_map(|&i| self.filtered_entries.get(i).cloned())
             .collect()
     }
 
@@ -213,7 +247,7 @@ impl FilePanel {
     pub fn select_all(&mut self, cx: &mut Context<Self>) {
         // Select all entries except ".." (parent directory)
         self.selected_indices = self
-            .entries
+            .filtered_entries
             .iter()
             .enumerate()
             .filter(|(_, e)| e.name != "..")
@@ -226,7 +260,7 @@ impl FilePanel {
 
     pub fn open_selected(&mut self, cx: &mut Context<Self>) {
         if let Some(&index) = self.selected_indices.first() {
-            if let Some(entry) = self.entries.get(index) {
+            if let Some(entry) = self.filtered_entries.get(index) {
                 if entry.is_directory() {
                     let path = entry.path.clone();
                     self.navigate_to(path, cx);
@@ -245,7 +279,7 @@ impl FilePanel {
 
     pub fn move_selection_down(&mut self, cx: &mut Context<Self>) {
         let current = self.selected_indices.first().copied().unwrap_or(0);
-        let max_index = self.entries.len().saturating_sub(1);
+        let max_index = self.filtered_entries.len().saturating_sub(1);
         let new_index = if current < max_index {
             current + 1
         } else {
@@ -255,14 +289,14 @@ impl FilePanel {
     }
 
     pub fn move_selection_to_start(&mut self, cx: &mut Context<Self>) {
-        if !self.entries.is_empty() {
+        if !self.filtered_entries.is_empty() {
             self.select_single(0, cx);
         }
     }
 
     pub fn move_selection_to_end(&mut self, cx: &mut Context<Self>) {
-        if !self.entries.is_empty() {
-            self.select_single(self.entries.len() - 1, cx);
+        if !self.filtered_entries.is_empty() {
+            self.select_single(self.filtered_entries.len() - 1, cx);
         }
     }
 
@@ -276,7 +310,7 @@ impl FilePanel {
     pub fn page_down(&mut self, cx: &mut Context<Self>) {
         let current = self.selected_indices.first().copied().unwrap_or(0);
         let page_size = 10;
-        let max_index = self.entries.len().saturating_sub(1);
+        let max_index = self.filtered_entries.len().saturating_sub(1);
         let new_index = (current + page_size).min(max_index);
         self.select_single(new_index, cx);
     }
@@ -617,6 +651,7 @@ impl FilePanel {
 
         // Re-sort the entries
         sort_entries(&mut self.entries, &self.sort_column, &self.sort_order);
+        self.apply_filter();
         self.selected_indices.clear();
         cx.notify();
     }
@@ -858,11 +893,12 @@ impl FilePanel {
 
     fn render_status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let total_files = self.entries.len().saturating_sub(1);
+        let filtered_files = self.filtered_entries.len().saturating_sub(1);
         let selected_count = self.selected_indices.len();
         let selected_size: u64 = self
             .selected_indices
             .iter()
-            .filter_map(|&i| self.entries.get(i))
+            .filter_map(|&i| self.filtered_entries.get(i))
             .map(|e| e.size)
             .sum();
 
@@ -870,9 +906,11 @@ impl FilePanel {
             format!(
                 "{} of {} items selected ({})",
                 selected_count,
-                total_files,
+                filtered_files,
                 humansize::format_size(selected_size, humansize::BINARY)
             )
+        } else if !self.filter_text.is_empty() {
+            format!("{} of {} items (filtered)", filtered_files, total_files)
         } else {
             format!("{} items", total_files)
         };
@@ -900,7 +938,7 @@ impl Focusable for FilePanel {
 
 impl Render for FilePanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let entries: Vec<_> = self.entries.iter().cloned().enumerate().collect();
+        let entries: Vec<_> = self.filtered_entries.iter().cloned().enumerate().collect();
 
         // Use a subtle highlight for active panel
         let active_indicator_color = if self.is_active {

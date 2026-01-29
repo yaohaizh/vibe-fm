@@ -1,0 +1,159 @@
+# Vibe File Manager
+
+A modern dual-pane file manager built with Rust and [GPUI](https://gpui.rs/), inspired by classics like Total Commander and Directory Opus.
+
+![Vibe File Manager](assets/vibe_256.png)
+
+## Features
+
+### Core Features
+- **Dual-Pane Layout** - Two side-by-side file panels for easy file management
+- **Active Panel Indication** - Highlighted border shows the currently active panel
+- **Drive Selector** - Quick access to available drives (Windows) or mount points (Unix)
+- **File Type Icons** - Visual distinction between folders, documents, images, code files, and more
+
+### Navigation
+- **Breadcrumb Navigation** - Click any path segment to navigate directly
+- **History Navigation** - Back/Forward buttons with Alt+Left/Right shortcuts
+- **Parent Directory** - Navigate up with Backspace or the up arrow button
+- **Keyboard Navigation** - Arrow keys, Home, End, Page Up/Down support
+
+### File Operations
+- **Copy/Cut/Paste** - Standard clipboard operations (Ctrl+C/X/V)
+- **Delete** - Remove files and folders (Delete key or F8)
+- **Move** - Move files to the other panel (F6)
+- **Create** - New folder (Ctrl+Shift+N or F7) and new file (Ctrl+N)
+- **Rename** - Rename selected items (F2 or F9)
+- **Open** - Open files with default application (Enter or F3)
+
+### Selection
+- **Single Click** - Select individual items
+- **Ctrl+Click** - Toggle selection (multi-select)
+- **Shift+Click** - Range selection
+- **Ctrl+A** - Select all items
+
+### User Interface
+- **Toolbar** - Quick access buttons for common operations
+- **Function Bar** - Classic F-key bar (F3-F10) at the bottom
+- **Status Bar** - Shows item counts, selection info, and active panel
+- **Quick Filter** - Filter files by typing (Ctrl+F)
+- **Column Sorting** - Click column headers to sort by Name, Size, or Date
+- **Hidden Files** - Toggle visibility with Ctrl+H
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Tab` | Switch between panels |
+| `Enter` | Open selected item |
+| `Backspace` | Navigate to parent directory |
+| `Alt+Left` | Navigate back in history |
+| `Alt+Right` | Navigate forward in history |
+| `Ctrl+C` | Copy selected |
+| `Ctrl+X` | Cut selected |
+| `Ctrl+V` | Paste |
+| `Delete` / `F8` | Delete selected |
+| `F2` / `F9` | Rename |
+| `F3` | View/Open file |
+| `F4` | Edit file |
+| `F5` | Refresh / Copy to other panel |
+| `F6` | Move to other panel |
+| `F7` | New folder |
+| `F10` / `Alt+F4` | Exit |
+| `Ctrl+H` | Toggle hidden files |
+| `Ctrl+A` | Select all |
+| `Ctrl+F` | Quick filter |
+| `Escape` | Clear filter / Cancel |
+
+## Building
+
+### Prerequisites
+- Rust 1.70+ (install from [rustup.rs](https://rustup.rs/))
+- Windows 10/11 (primary target, Linux/macOS experimental)
+
+### Build Commands
+
+```bash
+# Clone the repository
+git clone https://github.com/yaohaizh/vibe-fm.git
+cd vibe-fm
+
+# Build debug version
+cargo build
+
+# Build release version (optimized)
+cargo build --release
+
+# Run the application
+cargo run --release
+```
+
+### Output
+- Debug build: `target/debug/vibe-fm.exe`
+- Release build: `target/release/vibe-fm.exe`
+
+## Project Structure
+
+```
+vibe-fm/
+├── src/
+│   ├── main.rs           # Application entry point
+│   ├── file_manager.rs   # Main dual-pane file manager component
+│   ├── file_panel.rs     # Individual file browser panel
+│   ├── file_entry.rs     # File/folder data structures and utilities
+│   ├── drive_selector.rs # Drive/mount point selector component
+│   ├── toolbar.rs        # Top toolbar with action buttons
+│   ├── status_bar.rs     # Bottom status bar
+│   ├── function_bar.rs   # F-key function bar
+│   └── filter_bar.rs     # Quick filter/search component
+├── assets/
+│   ├── icons/            # SVG icons for the UI
+│   ├── vibe.ico          # Windows application icon
+│   ├── vibe_256.png      # High-resolution icon
+│   └── vibe_64.png       # Medium-resolution icon
+├── Cargo.toml            # Rust dependencies
+├── build.rs              # Build script for Windows resources
+└── README.md
+```
+
+## Dependencies
+
+| Crate | Purpose |
+|-------|---------|
+| `gpui` | GPU-accelerated UI framework |
+| `gpui-component` | UI component library |
+| `gpui-component-assets` | Bundled icons and assets |
+| `chrono` | Date/time handling |
+| `humansize` | Human-readable file sizes |
+| `dirs` | Platform-specific directories |
+| `open` | Open files with default applications |
+
+## Roadmap
+
+- [x] Dual-pane layout
+- [x] Drive selector
+- [x] File operations (copy, cut, paste, delete)
+- [x] Keyboard shortcuts
+- [x] Function bar (F3-F10)
+- [x] Quick filter/search
+- [x] File size in status bar
+- [ ] Drag and drop support
+- [ ] Tab support (multiple directories per panel)
+- [ ] File preview panel
+- [ ] Bookmarks/favorites sidebar
+- [ ] Custom themes
+- [ ] Archive support (zip, tar, etc.)
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is open source. See the repository for license details.
+
+## Acknowledgments
+
+- Built with [GPUI](https://gpui.rs/) - the GPU-accelerated UI framework from Zed
+- Inspired by [Total Commander](https://www.ghisler.com/) and [Directory Opus](https://www.gpsoft.com.au/)
+- Icons from [Lucide](https://lucide.dev/)
