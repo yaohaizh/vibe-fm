@@ -429,6 +429,7 @@ impl Render for SettingsDialog {
         // Combine into dialog content with proper flex layout
         let dialog_content = v_flex()
             .size_full()
+            .h(px(600.)) // Fixed height to ensure scrolling
             .child(header)
             .child(scrollable_content)
             .child(footer);
@@ -456,7 +457,7 @@ impl Render for SettingsDialog {
                 div()
                     .id("settings-dialog-box")
                     .w(px(520.))
-                    .max_h(px(400.))
+                    .h(px(500.)) // Fixed height instead of max_h
                     .bg(cx.theme().background)
                     .border_1()
                     .border_color(cx.theme().border)
