@@ -1,8 +1,10 @@
 use chrono::{DateTime, Local};
 use gpui_component::IconName;
-use humansize::{format_size, BINARY};
+use humansize::{format_size, BINARY, DECIMAL};
 use std::path::PathBuf;
 use std::time::SystemTime;
+
+use crate::settings::{DateFormat, SizeFormat};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum FileType {
@@ -78,6 +80,17 @@ impl FileEntry {
         }
     }
 
+    /// Format size with the specified format setting
+    pub fn formatted_size_with_format(&self, size_format: SizeFormat) -> String {
+        match self.file_type {
+            FileType::Directory => "<DIR>".to_string(),
+            _ => match size_format {
+                SizeFormat::Binary => format_size(self.size, BINARY),
+                SizeFormat::Decimal => format_size(self.size, DECIMAL),
+            },
+        }
+    }
+
     pub fn formatted_date(&self) -> String {
         self.modified
             .map(|t| {
@@ -85,6 +98,70 @@ impl FileEntry {
                 datetime.format("%Y-%m-%d %H:%M").to_string()
             })
             .unwrap_or_default()
+    }
+
+    /// Format date with the specified format setting
+    pub fn formatted_date_with_format(&self, date_format: DateFormat) -> String {
+        self.modified
+            .map(|t| {
+                let datetime: DateTime<Local> = t.into();
+                match date_format {
+                    DateFormat::Relative => Self::format_relative_time(t),
+                    _ => datetime.format(date_format.format_string()).to_string(),
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    /// Format time as relative (e.g., "2 hours ago", "Yesterday")
+    fn format_relative_time(time: SystemTime) -> String {
+        let now = SystemTime::now();
+        let duration = match now.duration_since(time) {
+            Ok(d) => d,
+            Err(_) => return "In the future".to_string(),
+        };
+
+        let secs = duration.as_secs();
+        let mins = secs / 60;
+        let hours = mins / 60;
+        let days = hours / 24;
+
+        if secs < 60 {
+            "Just now".to_string()
+        } else if mins < 60 {
+            format!("{} min ago", mins)
+        } else if hours < 24 {
+            format!("{} hours ago", hours)
+        } else if days == 1 {
+            "Yesterday".to_string()
+        } else if days < 7 {
+            format!("{} days ago", days)
+        } else if days < 30 {
+            format!("{} weeks ago", days / 7)
+        } else if days < 365 {
+            format!("{} months ago", days / 30)
+        } else {
+            format!("{} years ago", days / 365)
+        }
+    }
+
+    /// Get display name, optionally hiding the extension
+    pub fn display_name(&self, show_extension: bool) -> String {
+        if show_extension || self.is_directory() || self.extension.is_none() {
+            self.name.clone()
+        } else {
+            // Remove extension from name
+            if let Some(ext) = &self.extension {
+                let suffix = format!(".{}", ext);
+                if self.name.to_lowercase().ends_with(&suffix) {
+                    self.name[..self.name.len() - suffix.len()].to_string()
+                } else {
+                    self.name.clone()
+                }
+            } else {
+                self.name.clone()
+            }
+        }
     }
 
     pub fn icon_name(&self) -> IconName {

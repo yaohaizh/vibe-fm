@@ -1,9 +1,11 @@
 use crate::drive_selector::{DriveSelector, DriveSelectorEvent, PanelSide};
-use crate::file_entry::FileEntry;
+use crate::file_entry::{FileEntry, SortColumn, SortOrder};
 use crate::file_ops;
 use crate::file_panel::{FilePanel, FilePanelEvent};
 use crate::filter_bar::{FilterBar, FilterBarEvent};
 use crate::function_bar::{FunctionBar, FunctionBarAction, FunctionBarEvent};
+use crate::settings::AppSettings;
+use crate::settings_dialog::{SettingsDialog, SettingsDialogEvent};
 use crate::status_bar::{ActivePanel, StatusBar};
 use crate::toolbar::{Toolbar, ToolbarAction, ToolbarEvent};
 use gpui::*;
@@ -38,6 +40,8 @@ actions!(
         // Filter
         ShowFilter,
         ClearFilter,
+        // Settings
+        ShowSettings,
     ]
 );
 
@@ -81,10 +85,12 @@ pub struct FileManager {
     status_bar: Entity<StatusBar>,
     function_bar: Entity<FunctionBar>,
     filter_bar: Entity<FilterBar>,
+    settings_dialog: Entity<SettingsDialog>,
     left_drive_selector: Entity<DriveSelector>,
     right_drive_selector: Entity<DriveSelector>,
     active_panel: ActivePanel,
     clipboard: Option<Clipboard>,
+    settings: AppSettings,
     focus_handle: FocusHandle,
 }
 
@@ -96,14 +102,38 @@ struct Clipboard {
 
 impl FileManager {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        // Load settings from file or use defaults
+        let settings = AppSettings::load();
+
         let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
 
+        // Use saved paths if available and remember_last_paths is enabled
         #[cfg(target_os = "windows")]
-        let left_path = PathBuf::from("C:\\");
+        let default_left_path = PathBuf::from("C:\\");
         #[cfg(not(target_os = "windows"))]
-        let left_path = home_dir.clone();
+        let default_left_path = home_dir.clone();
 
-        let right_path = home_dir;
+        let left_path = if settings.remember_last_paths {
+            settings
+                .left_panel_path
+                .as_ref()
+                .map(PathBuf::from)
+                .filter(|p| p.exists())
+                .unwrap_or(default_left_path)
+        } else {
+            default_left_path
+        };
+
+        let right_path = if settings.remember_last_paths {
+            settings
+                .right_panel_path
+                .as_ref()
+                .map(PathBuf::from)
+                .filter(|p| p.exists())
+                .unwrap_or(home_dir.clone())
+        } else {
+            home_dir
+        };
 
         let left_panel = cx.new(|cx| FilePanel::new("left-panel", left_path, window, cx));
         let right_panel = cx.new(|cx| FilePanel::new("right-panel", right_path, window, cx));
@@ -111,6 +141,7 @@ impl FileManager {
         let status_bar = cx.new(|_cx| StatusBar::new());
         let function_bar = cx.new(|_cx| FunctionBar::new());
         let filter_bar = cx.new(|cx| FilterBar::new(cx));
+        let settings_dialog = cx.new(|cx| SettingsDialog::new(settings.clone(), cx));
         let left_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Left));
         let right_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Right));
 
@@ -123,13 +154,33 @@ impl FileManager {
             .detach();
         cx.subscribe(&filter_bar, Self::on_filter_bar_event)
             .detach();
+        cx.subscribe(&settings_dialog, Self::on_settings_dialog_event)
+            .detach();
         cx.subscribe(&left_drive_selector, Self::on_drive_selected)
             .detach();
         cx.subscribe(&right_drive_selector, Self::on_drive_selected)
             .detach();
 
+        // Apply initial settings to panels
+        let sort_column = Self::convert_sort_column(settings.default_sort_column);
+        let sort_order = Self::convert_sort_order(settings.default_sort_order);
+
         left_panel.update(cx, |panel, cx| {
+            panel.set_show_hidden(settings.show_hidden_files, cx);
+            panel.set_date_format(settings.date_format, cx);
+            panel.set_size_format(settings.size_format, cx);
+            panel.set_show_file_extensions(settings.show_file_extensions, cx);
+            panel.set_single_click_to_open(settings.single_click_to_open, cx);
+            panel.set_sort(sort_column.clone(), sort_order.clone(), cx);
             panel.set_active(true, cx);
+        });
+        right_panel.update(cx, |panel, cx| {
+            panel.set_show_hidden(settings.show_hidden_files, cx);
+            panel.set_date_format(settings.date_format, cx);
+            panel.set_size_format(settings.size_format, cx);
+            panel.set_show_file_extensions(settings.show_file_extensions, cx);
+            panel.set_single_click_to_open(settings.single_click_to_open, cx);
+            panel.set_sort(sort_column.clone(), sort_order.clone(), cx);
         });
 
         let focus_handle = cx.focus_handle();
@@ -141,10 +192,12 @@ impl FileManager {
             status_bar,
             function_bar,
             filter_bar,
+            settings_dialog,
             left_drive_selector,
             right_drive_selector,
             active_panel: ActivePanel::Left,
             clipboard: None,
+            settings,
             focus_handle,
         }
     }
@@ -286,6 +339,15 @@ impl FileManager {
         });
     }
 
+    fn handle_show_settings(
+        &mut self,
+        _: &ShowSettings,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.show_settings(window, cx);
+    }
+
     fn on_left_panel_event(
         &mut self,
         _panel: Entity<FilePanel>,
@@ -369,7 +431,9 @@ impl FileManager {
                 ToolbarAction::ToggleHidden => self.toggle_hidden(cx),
                 ToolbarAction::SwapPanels => self.swap_panels(cx),
                 ToolbarAction::Search => {}
-                ToolbarAction::Settings => {}
+                ToolbarAction::Settings => {
+                    cx.dispatch_action(&ShowSettings);
+                }
             },
         }
     }
@@ -661,6 +725,91 @@ impl FileManager {
 
         self.refresh_panels(cx);
     }
+
+    fn show_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Update dialog with current settings before showing
+        self.settings_dialog.update(cx, |dialog, cx| {
+            dialog.update_settings(self.settings.clone(), cx);
+            dialog.show(window, cx);
+        });
+    }
+
+    fn on_settings_dialog_event(
+        &mut self,
+        _dialog: Entity<SettingsDialog>,
+        event: &SettingsDialogEvent,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            SettingsDialogEvent::Saved(new_settings) => {
+                self.apply_settings(new_settings.clone(), cx);
+            }
+            SettingsDialogEvent::Cancelled => {
+                // Nothing to do, dialog already closed
+            }
+        }
+    }
+
+    fn apply_settings(&mut self, mut settings: AppSettings, cx: &mut Context<Self>) {
+        // Save current paths if remember_last_paths is enabled
+        if settings.remember_last_paths {
+            settings.left_panel_path = Some(
+                self.left_panel
+                    .read(cx)
+                    .current_path()
+                    .to_string_lossy()
+                    .to_string(),
+            );
+            settings.right_panel_path = Some(
+                self.right_panel
+                    .read(cx)
+                    .current_path()
+                    .to_string_lossy()
+                    .to_string(),
+            );
+        }
+
+        // Apply all display settings to both panels
+        self.left_panel.update(cx, |panel, cx| {
+            panel.set_show_hidden(settings.show_hidden_files, cx);
+            panel.set_date_format(settings.date_format, cx);
+            panel.set_size_format(settings.size_format, cx);
+            panel.set_show_file_extensions(settings.show_file_extensions, cx);
+            panel.set_single_click_to_open(settings.single_click_to_open, cx);
+        });
+        self.right_panel.update(cx, |panel, cx| {
+            panel.set_show_hidden(settings.show_hidden_files, cx);
+            panel.set_date_format(settings.date_format, cx);
+            panel.set_size_format(settings.size_format, cx);
+            panel.set_show_file_extensions(settings.show_file_extensions, cx);
+            panel.set_single_click_to_open(settings.single_click_to_open, cx);
+        });
+
+        // Save settings to file
+        if let Err(e) = settings.save() {
+            log::error!("Failed to save settings: {}", e);
+        }
+
+        self.settings = settings;
+        cx.notify();
+    }
+
+    /// Convert settings SortColumn to file_entry SortColumn
+    fn convert_sort_column(settings_column: crate::settings::SortColumn) -> SortColumn {
+        match settings_column {
+            crate::settings::SortColumn::Name => SortColumn::Name,
+            crate::settings::SortColumn::Size => SortColumn::Size,
+            crate::settings::SortColumn::Modified => SortColumn::Modified,
+        }
+    }
+
+    /// Convert settings SortOrder to file_entry SortOrder
+    fn convert_sort_order(settings_order: crate::settings::SortOrder) -> SortOrder {
+        match settings_order {
+            crate::settings::SortOrder::Ascending => SortOrder::Ascending,
+            crate::settings::SortOrder::Descending => SortOrder::Descending,
+        }
+    }
 }
 
 impl Render for FileManager {
@@ -702,6 +851,7 @@ impl Render for FileManager {
             .on_action(cx.listener(Self::handle_exit))
             .on_action(cx.listener(Self::handle_show_filter))
             .on_action(cx.listener(Self::handle_clear_filter))
+            .on_action(cx.listener(Self::handle_show_settings))
             .track_focus(&self.focus_handle)
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
@@ -747,6 +897,8 @@ impl Render for FileManager {
             .child(self.status_bar.clone())
             // Function bar at the very bottom
             .child(self.function_bar.clone())
+            // Settings dialog overlay (rendered on top when visible)
+            .child(self.settings_dialog.clone())
     }
 }
 

@@ -1,9 +1,10 @@
 use crate::file_entry::{sort_entries, FileEntry, SortColumn, SortOrder};
+use crate::settings::{DateFormat, SizeFormat};
+use crate::shell_context_menu;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::breadcrumb::{Breadcrumb, BreadcrumbItem};
 use gpui_component::button::{Button, ButtonVariants};
-use gpui_component::menu::ContextMenuExt;
 use gpui_component::scroll::ScrollableElement;
 use gpui_component::{
     h_flex, v_flex, ActiveTheme, Disableable, IconName, InteractiveElementExt, Selectable, Sizable,
@@ -44,6 +45,11 @@ pub struct FilePanel {
     is_active: bool,
     scroll_handle: ScrollHandle,
     focus_handle: FocusHandle,
+    // Display format settings
+    date_format: DateFormat,
+    size_format: SizeFormat,
+    show_file_extensions: bool,
+    single_click_to_open: bool,
 }
 
 pub enum FilePanelEvent {
@@ -90,6 +96,11 @@ impl FilePanel {
             is_active: false,
             scroll_handle: ScrollHandle::new(),
             focus_handle,
+            // Default display settings
+            date_format: DateFormat::default(),
+            size_format: SizeFormat::default(),
+            show_file_extensions: true,
+            single_click_to_open: false,
         }
     }
 
@@ -175,6 +186,44 @@ impl FilePanel {
     pub fn toggle_hidden(&mut self, cx: &mut Context<Self>) {
         self.show_hidden = !self.show_hidden;
         self.refresh(cx);
+    }
+
+    pub fn set_show_hidden(&mut self, show: bool, cx: &mut Context<Self>) {
+        if self.show_hidden != show {
+            self.show_hidden = show;
+            self.refresh(cx);
+        }
+    }
+
+    /// Update display format settings
+    pub fn set_date_format(&mut self, format: DateFormat, cx: &mut Context<Self>) {
+        self.date_format = format;
+        cx.notify();
+    }
+
+    pub fn set_size_format(&mut self, format: SizeFormat, cx: &mut Context<Self>) {
+        self.size_format = format;
+        cx.notify();
+    }
+
+    pub fn set_show_file_extensions(&mut self, show: bool, cx: &mut Context<Self>) {
+        self.show_file_extensions = show;
+        cx.notify();
+    }
+
+    pub fn set_single_click_to_open(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        self.single_click_to_open = enabled;
+        cx.notify();
+    }
+
+    /// Set the sort column and order
+    pub fn set_sort(&mut self, column: SortColumn, order: SortOrder, cx: &mut Context<Self>) {
+        self.sort_column = column;
+        self.sort_order = order;
+        sort_entries(&mut self.entries, &self.sort_column, &self.sort_order);
+        self.apply_filter();
+        self.selected_indices.clear();
+        cx.notify();
     }
 
     pub fn set_active(&mut self, active: bool, cx: &mut Context<Self>) {
@@ -660,6 +709,7 @@ impl FilePanel {
         &self,
         index: usize,
         entry: &FileEntry,
+        window: &Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let is_selected = self.selected_indices.contains(&index);
@@ -667,11 +717,11 @@ impl FilePanel {
         let is_dir = entry.is_directory();
         let is_hidden = entry.is_hidden;
         let is_directory = entry.is_directory();
-        let is_parent_entry = entry.name == "..";
-        let name = entry.name.clone();
+        let name = entry.display_name(self.show_file_extensions);
         let icon_name = entry.icon_name();
-        let size = entry.formatted_size();
-        let date = entry.formatted_date();
+        let size = entry.formatted_size_with_format(self.size_format);
+        let date = entry.formatted_date_with_format(self.date_format);
+        let single_click_open = self.single_click_to_open;
 
         let bg_color = if is_selected {
             cx.theme().primary.opacity(0.15)
@@ -687,7 +737,8 @@ impl FilePanel {
         };
         let muted_fg = cx.theme().muted_foreground;
 
-        let entity = cx.entity().clone();
+        let entry_path_for_click = entry_path.clone();
+        let entry_path_for_context = entry_path.clone();
 
         h_flex()
             .id(ElementId::Name(format!("file-{}", index).into()))
@@ -701,6 +752,14 @@ impl FilePanel {
             .cursor_pointer()
             .on_click(cx.listener(move |this, event: &ClickEvent, _window, cx| {
                 this.handle_click(index, event.modifiers(), cx);
+                // Single click to open if enabled (and no modifiers pressed)
+                if single_click_open && !event.modifiers().control && !event.modifiers().shift {
+                    if is_dir {
+                        this.navigate_to(entry_path_for_click.clone(), cx);
+                    } else {
+                        let _ = open::that(&entry_path_for_click);
+                    }
+                }
             }))
             .on_double_click(cx.listener(move |this, _, _window, cx| {
                 if is_dir {
@@ -709,152 +768,32 @@ impl FilePanel {
                     let _ = open::that(&entry_path);
                 }
             }))
-            .context_menu(move |menu, _window, _cx| {
-                let entity = entity.clone();
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, _event: &MouseDownEvent, _window, cx| {
+                    // Select the item if not already selected
+                    if !this.selected_indices.contains(&index) {
+                        this.select_single(index, cx);
+                    }
 
-                // Don't show destructive options for parent directory entry
-                if is_parent_entry {
-                    return menu
-                        .item(
-                            gpui_component::menu::PopupMenuItem::new("Open")
-                                .icon(IconName::FolderOpen)
-                                .on_click({
-                                    let entity = entity.clone();
-                                    move |_, _, cx| {
-                                        entity.update(cx, |panel, cx| {
-                                            panel.open_selected(cx);
-                                        });
-                                    }
-                                }),
-                        )
-                        .separator()
-                        .item(
-                            gpui_component::menu::PopupMenuItem::new("Refresh")
-                                .icon(IconName::Loader)
-                                .on_click({
-                                    let entity = entity.clone();
-                                    move |_, _, cx| {
-                                        entity.update(cx, |panel, cx| {
-                                            panel.refresh(cx);
-                                        });
-                                    }
-                                }),
-                        );
-                }
+                    // Get selected paths
+                    let selected_entries = this.selected_entries();
+                    let paths: Vec<PathBuf> = if selected_entries.is_empty() {
+                        vec![entry_path_for_context.clone()]
+                    } else {
+                        selected_entries.iter().map(|e| e.path.clone()).collect()
+                    };
 
-                menu.item(
-                    gpui_component::menu::PopupMenuItem::new("Open")
-                        .icon(IconName::FolderOpen)
-                        .on_click({
-                            let entity = entity.clone();
-                            move |_, _, cx| {
-                                entity.update(cx, |panel, cx| {
-                                    panel.open_selected(cx);
-                                });
-                            }
-                        }),
-                )
-                .separator()
-                .item(
-                    gpui_component::menu::PopupMenuItem::new("Copy")
-                        .icon(IconName::Copy)
-                        .on_click({
-                            let entity = entity.clone();
-                            move |_, _, cx| {
-                                entity.update(cx, |_, cx| {
-                                    cx.emit(FilePanelEvent::RequestCopy);
-                                });
-                            }
-                        }),
-                )
-                .item(
-                    gpui_component::menu::PopupMenuItem::new("Cut")
-                        .icon(IconName::Close) // No scissors, use close as placeholder
-                        .on_click({
-                            let entity = entity.clone();
-                            move |_, _, cx| {
-                                entity.update(cx, |_, cx| {
-                                    cx.emit(FilePanelEvent::RequestCut);
-                                });
-                            }
-                        }),
-                )
-                .item(
-                    gpui_component::menu::PopupMenuItem::new("Paste")
-                        .icon(IconName::File) // Use file icon for paste
-                        .on_click({
-                            let entity = entity.clone();
-                            move |_, _, cx| {
-                                entity.update(cx, |_, cx| {
-                                    cx.emit(FilePanelEvent::RequestPaste);
-                                });
-                            }
-                        }),
-                )
-                .separator()
-                .item(
-                    gpui_component::menu::PopupMenuItem::new("Delete")
-                        .icon(IconName::Delete)
-                        .on_click({
-                            let entity = entity.clone();
-                            move |_, _, cx| {
-                                entity.update(cx, |_, cx| {
-                                    cx.emit(FilePanelEvent::RequestDelete);
-                                });
-                            }
-                        }),
-                )
-                .item(
-                    gpui_component::menu::PopupMenuItem::new("Rename")
-                        .icon(IconName::Frame) // Use frame for rename
-                        .on_click({
-                            let entity = entity.clone();
-                            move |_, _, cx| {
-                                entity.update(cx, |_, cx| {
-                                    cx.emit(FilePanelEvent::RequestRename);
-                                });
-                            }
-                        }),
-                )
-                .separator()
-                .item(
-                    gpui_component::menu::PopupMenuItem::new("New Folder")
-                        .icon(IconName::Folder)
-                        .on_click({
-                            let entity = entity.clone();
-                            move |_, _, cx| {
-                                entity.update(cx, |_, cx| {
-                                    cx.emit(FilePanelEvent::RequestNewFolder);
-                                });
-                            }
-                        }),
-                )
-                .item(
-                    gpui_component::menu::PopupMenuItem::new("New File")
-                        .icon(IconName::File)
-                        .on_click({
-                            let entity = entity.clone();
-                            move |_, _, cx| {
-                                entity.update(cx, |_, cx| {
-                                    cx.emit(FilePanelEvent::RequestNewFile);
-                                });
-                            }
-                        }),
-                )
-                .separator()
-                .item(
-                    gpui_component::menu::PopupMenuItem::new("Refresh")
-                        .icon(IconName::Loader)
-                        .on_click({
-                            let entity = entity.clone();
-                            move |_, _, cx| {
-                                entity.update(cx, |panel, cx| {
-                                    panel.refresh(cx);
-                                });
-                            }
-                        }),
-                )
-            })
+                    // Show the native context menu
+                    // Run this in a separate thread to not block the UI
+                    std::thread::spawn(move || {
+                        let _ = shell_context_menu::show_context_menu_for_paths(&paths);
+                    });
+
+                    // Stop propagation
+                    cx.stop_propagation();
+                }),
+            )
             .child(
                 div()
                     .w(px(24.))
@@ -937,7 +876,7 @@ impl Focusable for FilePanel {
 }
 
 impl Render for FilePanel {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let entries: Vec<_> = self.filtered_entries.iter().cloned().enumerate().collect();
 
         // Use a subtle highlight for active panel
@@ -972,7 +911,7 @@ impl Render for FilePanel {
                     div().size_full().overflow_y_scrollbar().children(
                         entries
                             .iter()
-                            .map(|(idx, entry)| self.render_file_row(*idx, entry, cx)),
+                            .map(|(idx, entry)| self.render_file_row(*idx, entry, window, cx)),
                     ),
                 ),
             )

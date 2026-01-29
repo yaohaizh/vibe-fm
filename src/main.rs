@@ -1,3 +1,6 @@
+// Hide console window on Windows release builds
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod drive_selector;
 mod file_entry;
 mod file_manager;
@@ -5,6 +8,9 @@ mod file_ops;
 mod file_panel;
 mod filter_bar;
 mod function_bar;
+mod settings;
+mod settings_dialog;
+mod shell_context_menu;
 mod status_bar;
 mod toolbar;
 
