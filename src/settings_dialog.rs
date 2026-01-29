@@ -339,7 +339,7 @@ impl Render for SettingsDialog {
                         "show-thumbnails",
                         "Show image thumbnails",
                         false,
-                        |this, checked, cx| {
+                        |_this, _checked, cx| {
                             // Placeholder for future feature
                             cx.notify();
                         },
@@ -349,7 +349,7 @@ impl Render for SettingsDialog {
                         "show-preview",
                         "Show file preview pane",
                         false,
-                        |this, checked, cx| {
+                        |_this, _checked, cx| {
                             // Placeholder for future feature
                             cx.notify();
                         },
@@ -359,7 +359,7 @@ impl Render for SettingsDialog {
                         "auto-refresh",
                         "Auto-refresh directory listing",
                         true,
-                        |this, checked, cx| {
+                        |_this, _checked, cx| {
                             // Placeholder for future feature
                             cx.notify();
                         },
@@ -373,7 +373,7 @@ impl Render for SettingsDialog {
                             ("dark", "theme-dark", "Dark"),
                             ("auto", "theme-auto", "Auto"),
                         ],
-                        |this, value, cx| {
+                        |_this, _value, cx| {
                             // Placeholder for future feature
                             cx.notify();
                         },
@@ -388,7 +388,7 @@ impl Render for SettingsDialog {
                             ("de", "lang-de", "German"),
                             ("es", "lang-es", "Spanish"),
                         ],
-                        |this, value, cx| {
+                        |_this, _value, cx| {
                             // Placeholder for future feature
                             cx.notify();
                         },
@@ -428,8 +428,8 @@ impl Render for SettingsDialog {
 
         // Combine into dialog content with proper flex layout
         let dialog_content = v_flex()
-            .size_full()
-            .h(px(600.)) // Fixed height to ensure scrolling
+            .flex_1()
+            .overflow_hidden()
             .child(header)
             .child(scrollable_content)
             .child(footer);
@@ -456,8 +456,10 @@ impl Render for SettingsDialog {
                 // Dialog box - centered, with click handler to stop propagation
                 div()
                     .id("settings-dialog-box")
+                    .flex()
+                    .flex_col()
                     .w(px(520.))
-                    .h(px(500.)) // Fixed height instead of max_h
+                    .h(px(600.))
                     .bg(cx.theme().background)
                     .border_1()
                     .border_color(cx.theme().border)
