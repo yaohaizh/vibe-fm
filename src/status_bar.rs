@@ -78,11 +78,11 @@ impl Render for StatusBar {
         };
 
         h_flex()
-            .h_6()
-            .px_3()
+            .h_7()
+            .px_4()
             .justify_between()
             .items_center()
-            .bg(cx.theme().secondary)
+            .bg(cx.theme().background)
             .border_t_1()
             .border_color(cx.theme().border)
             .text_xs()

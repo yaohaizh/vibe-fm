@@ -108,10 +108,10 @@ impl Render for DriveSelector {
 
         h_flex()
             .gap_1()
-            .px_2()
-            .py_1()
+            .px_3()
+            .py_2()
             .flex_wrap()
-            .bg(cx.theme().secondary)
+            .bg(cx.theme().background)
             .border_b_1()
             .border_color(cx.theme().border)
             .children(self.drives.iter().map(|drive| {

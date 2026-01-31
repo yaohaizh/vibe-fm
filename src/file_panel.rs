@@ -455,11 +455,11 @@ impl FilePanel {
 
         h_flex()
             .gap_1()
-            .p_1()
+            .p_2()
             .items_center()
             .border_b_1()
             .border_color(cx.theme().border)
-            .bg(cx.theme().secondary)
+            .bg(cx.theme().background)
             .child(
                 Button::new("back")
                     .icon(IconName::ArrowLeft)
@@ -596,15 +596,15 @@ impl FilePanel {
         let current_sort_order = self.sort_order.clone();
 
         h_flex()
-            .h_7()
-            .px_2()
-            .bg(cx.theme().secondary)
+            .h_8()
+            .px_3()
+            .bg(cx.theme().background)
             .border_b_1()
             .border_color(cx.theme().border)
             .items_center()
             .text_xs()
             .font_weight(FontWeight::SEMIBOLD)
-            .text_color(cx.theme().muted_foreground)
+            .text_color(cx.theme().foreground.opacity(0.7))
             .child(div().w(px(24.)))
             .child(self.render_sortable_header(
                 "Name",
@@ -664,9 +664,18 @@ impl FilePanel {
             .flex()
             .items_center()
             .gap_1()
+            .px_2()
+            .py_1()
+            .rounded_md()
             .cursor_pointer()
-            .hover(|s| s.text_color(cx.theme().foreground))
-            .when(is_active, |el| el.text_color(cx.theme().foreground))
+            .hover(|s| {
+                s.bg(cx.theme().secondary.opacity(0.5))
+                    .text_color(cx.theme().foreground)
+            })
+            .when(is_active, |el| {
+                el.text_color(cx.theme().primary)
+                    .font_weight(FontWeight::BOLD)
+            })
             .when(is_flex, |el| el.flex_1())
             .when_some(width, |el, w| el.w(w).justify_end())
             .on_click(cx.listener(move |this, _, _window, cx| {
@@ -724,12 +733,17 @@ impl FilePanel {
         let single_click_open = self.single_click_to_open;
 
         let bg_color = if is_selected {
-            cx.theme().primary.opacity(0.15)
+            cx.theme().primary.opacity(0.2)
         } else {
             cx.theme().transparent
         };
 
-        let hover_color = cx.theme().secondary;
+        let hover_color = if is_selected {
+            cx.theme().primary.opacity(0.25)
+        } else {
+            cx.theme().secondary.opacity(0.5)
+        };
+
         let icon_color = if is_directory {
             cx.theme().warning
         } else {
@@ -744,10 +758,11 @@ impl FilePanel {
             .id(ElementId::Name(format!("file-{}", index).into()))
             .h_7()
             .px_2()
+            .mx_1()
+            .my_px()
             .bg(bg_color)
             .hover(|s| s.bg(hover_color))
-            .border_b_1()
-            .border_color(cx.theme().border.opacity(0.3))
+            .rounded_md()
             .items_center()
             .cursor_pointer()
             .on_click(cx.listener(move |this, event: &ClickEvent, _window, cx| {

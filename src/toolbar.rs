@@ -41,11 +41,11 @@ impl Toolbar {
 impl Render for Toolbar {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
-            .h(px(40.))
-            .px_2()
+            .h(px(44.))
+            .px_3()
             .gap_1()
             .items_center()
-            .bg(cx.theme().secondary)
+            .bg(cx.theme().background)
             .border_b_1()
             .border_color(cx.theme().border)
             // File operations group
@@ -75,7 +75,7 @@ impl Render for Toolbar {
                             })),
                     ),
             )
-            .child(div().w_px().h_6().bg(cx.theme().border))
+            .child(div().w_px().h_5().mx_1().bg(cx.theme().border.opacity(0.4)))
             // Create operations
             .child(
                 h_flex()
@@ -103,7 +103,7 @@ impl Render for Toolbar {
                             })),
                     ),
             )
-            .child(div().w_px().h_6().bg(cx.theme().border))
+            .child(div().w_px().h_5().mx_1().bg(cx.theme().border.opacity(0.4)))
             // Edit operations
             .child(
                 h_flex().gap_0p5().child(
@@ -118,7 +118,7 @@ impl Render for Toolbar {
                         })),
                 ),
             )
-            .child(div().w_px().h_6().bg(cx.theme().border))
+            .child(div().w_px().h_5().mx_1().bg(cx.theme().border.opacity(0.4)))
             // View operations
             .child(
                 h_flex()

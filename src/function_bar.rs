@@ -31,13 +31,13 @@ impl Render for FunctionBar {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .w_full()
-            .h_8()
-            .bg(cx.theme().secondary)
+            .h_9()
+            .bg(cx.theme().background)
             .border_t_1()
             .border_color(cx.theme().border)
             .items_center()
             .justify_between()
-            .px_1()
+            .px_2()
             .gap_1()
             // F3 - View
             .child(

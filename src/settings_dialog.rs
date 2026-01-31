@@ -438,8 +438,8 @@ impl Render for SettingsDialog {
             .flex()
             .justify_center()
             .items_start()
-            .pt(px(80.))
-            .bg(rgba(0x000000A0))
+            .pt(px(60.))
+            .bg(rgba(0x000000B0))
             .on_click(cx.listener(|this, _, _, cx| {
                 // This will be called for clicks on the backdrop only
                 // because the dialog has its own click handler that stops propagation
@@ -453,13 +453,13 @@ impl Render for SettingsDialog {
                     .id("settings-dialog-box")
                     .flex()
                     .flex_col()
-                    .w(px(520.))
-                    .h(px(600.))
+                    .w(px(560.))
+                    .h(px(640.))
                     .bg(cx.theme().background)
                     .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_lg()
-                    .shadow_xl()
+                    .border_color(cx.theme().border.opacity(0.3))
+                    .rounded_xl()
+                    .shadow_2xl()
                     .on_click(cx.listener(|_, _, _, cx| {
                         // Stop propagation - prevent backdrop click handler
                         cx.stop_propagation();
