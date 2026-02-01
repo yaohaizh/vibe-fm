@@ -423,8 +423,7 @@ impl Render for SettingsDialog {
 
         // Combine into dialog content with proper flex layout
         let dialog_content = v_flex()
-            .flex_1()
-            .overflow_hidden()
+            .size_full()
             .child(header)
             .child(scrollable_content)
             .child(footer);
