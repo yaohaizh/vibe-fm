@@ -1,6 +1,7 @@
 // Hide console window on Windows release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod batch_rename_dialog;
 mod drive_selector;
 mod file_entry;
 mod file_manager;
