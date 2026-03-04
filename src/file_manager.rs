@@ -2,6 +2,7 @@ use crate::drive_selector::{DriveSelector, DriveSelectorEvent, PanelSide};
 use crate::file_entry::{FileEntry, SortColumn, SortOrder};
 use crate::file_ops;
 use crate::file_panel::{FilePanel, FilePanelEvent};
+use crate::file_properties_dialog::{FilePropertiesDialog, FilePropertiesDialogEvent};
 use crate::filter_bar::{FilterBar, FilterBarEvent};
 use crate::function_bar::{FunctionBar, FunctionBarAction, FunctionBarEvent};
 use crate::rename_dialog::{RenameDialog, RenameDialogEvent};
@@ -37,6 +38,7 @@ actions!(
         Edit,
         Move,
         Rename,
+        Properties,
         Exit,
         // Filter
         ShowFilter,
@@ -73,6 +75,7 @@ pub fn register_keybindings(cx: &mut App) {
         KeyBinding::new("f9", Rename, Some("FileManager")),
         KeyBinding::new("f10", Exit, Some("FileManager")),
         KeyBinding::new("alt-f4", Exit, Some("FileManager")),
+        KeyBinding::new("alt-enter", Properties, Some("FileManager")),
         // Filter
         KeyBinding::new("ctrl-f", ShowFilter, Some("FileManager")),
         KeyBinding::new("escape", ClearFilter, Some("FileManager")),
@@ -88,6 +91,7 @@ pub struct FileManager {
     filter_bar: Entity<FilterBar>,
     settings_dialog: Entity<SettingsDialog>,
     rename_dialog: Entity<RenameDialog>,
+    file_properties_dialog: Entity<FilePropertiesDialog>,
     left_drive_selector: Entity<DriveSelector>,
     right_drive_selector: Entity<DriveSelector>,
     active_panel: ActivePanel,
@@ -145,6 +149,7 @@ impl FileManager {
         let filter_bar = cx.new(|cx| FilterBar::new(cx));
         let settings_dialog = cx.new(|cx| SettingsDialog::new(settings.clone(), cx));
         let rename_dialog = cx.new(|cx| RenameDialog::new(cx));
+        let file_properties_dialog = cx.new(|cx| FilePropertiesDialog::new(cx));
         let left_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Left));
         let right_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Right));
 
@@ -161,6 +166,11 @@ impl FileManager {
             .detach();
         cx.subscribe(&rename_dialog, Self::on_rename_dialog_event)
             .detach();
+        cx.subscribe(
+            &file_properties_dialog,
+            Self::on_file_properties_dialog_event,
+        )
+        .detach();
         cx.subscribe(&left_drive_selector, Self::on_drive_selected)
             .detach();
         cx.subscribe(&right_drive_selector, Self::on_drive_selected)
@@ -199,6 +209,7 @@ impl FileManager {
             filter_bar,
             settings_dialog,
             rename_dialog,
+            file_properties_dialog,
             left_drive_selector,
             right_drive_selector,
             active_panel: ActivePanel::Left,
@@ -352,6 +363,19 @@ impl FileManager {
         cx: &mut Context<Self>,
     ) {
         self.show_settings(window, cx);
+    }
+
+    fn handle_properties(&mut self, _: &Properties, window: &mut Window, cx: &mut Context<Self>) {
+        self.show_properties(window, cx);
+    }
+
+    fn show_properties(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let entries = self.active_panel_entity().read(cx).selected_entries();
+        if !entries.is_empty() {
+            self.file_properties_dialog.update(cx, |dialog, cx| {
+                dialog.show(entries, window, cx);
+            });
+        }
     }
 
     fn on_left_panel_event(
@@ -785,6 +809,19 @@ impl FileManager {
         }
     }
 
+    fn on_file_properties_dialog_event(
+        &mut self,
+        _dialog: Entity<FilePropertiesDialog>,
+        event: &FilePropertiesDialogEvent,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            FilePropertiesDialogEvent::Closed => {
+                // Nothing to do, dialog already closed
+            }
+        }
+    }
+
     fn apply_settings(&mut self, mut settings: AppSettings, cx: &mut Context<Self>) {
         // Save current paths if remember_last_paths is enabled
         if settings.remember_last_paths {
@@ -883,6 +920,7 @@ impl Render for FileManager {
             .on_action(cx.listener(Self::handle_edit))
             .on_action(cx.listener(Self::handle_move))
             .on_action(cx.listener(Self::handle_rename))
+            .on_action(cx.listener(Self::handle_properties))
             .on_action(cx.listener(Self::handle_exit))
             .on_action(cx.listener(Self::handle_show_filter))
             .on_action(cx.listener(Self::handle_clear_filter))
@@ -936,6 +974,8 @@ impl Render for FileManager {
             .child(self.settings_dialog.clone())
             // Rename dialog overlay (rendered on top when visible)
             .child(self.rename_dialog.clone())
+            // File properties dialog overlay (rendered on top when visible)
+            .child(self.file_properties_dialog.clone())
     }
 }
 

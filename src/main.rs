@@ -6,6 +6,7 @@ mod file_entry;
 mod file_manager;
 mod file_ops;
 mod file_panel;
+mod file_properties_dialog;
 mod filter_bar;
 mod function_bar;
 mod rename_dialog;
