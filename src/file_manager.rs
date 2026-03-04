@@ -1,5 +1,6 @@
 use crate::batch_rename_dialog::{BatchRenameDialog, BatchRenameDialogEvent};
 use crate::drive_selector::{DriveSelector, DriveSelectorEvent, PanelSide};
+use crate::favorites::FavoritesManager;
 use crate::file_entry::{FileEntry, SortColumn, SortOrder};
 use crate::file_ops;
 use crate::file_panel::{FilePanel, FilePanelEvent};
@@ -41,6 +42,7 @@ actions!(
         Rename,
         Properties,
         BatchRename,
+        AddToFavorites,
         Exit,
         // Filter
         ShowFilter,
@@ -79,6 +81,7 @@ pub fn register_keybindings(cx: &mut App) {
         KeyBinding::new("alt-f4", Exit, Some("FileManager")),
         KeyBinding::new("alt-enter", Properties, Some("FileManager")),
         KeyBinding::new("ctrl-m", BatchRename, Some("FileManager")),
+        KeyBinding::new("ctrl-d", AddToFavorites, Some("FileManager")),
         // Filter
         KeyBinding::new("ctrl-f", ShowFilter, Some("FileManager")),
         KeyBinding::new("escape", ClearFilter, Some("FileManager")),
@@ -101,6 +104,7 @@ pub struct FileManager {
     active_panel: ActivePanel,
     clipboard: Option<Clipboard>,
     settings: AppSettings,
+    favorites_manager: FavoritesManager,
     focus_handle: FocusHandle,
 }
 
@@ -114,6 +118,7 @@ impl FileManager {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         // Load settings from file or use defaults
         let settings = AppSettings::load();
+        let favorites_manager = FavoritesManager::new();
 
         let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
 
@@ -223,6 +228,7 @@ impl FileManager {
             active_panel: ActivePanel::Left,
             clipboard: None,
             settings,
+            favorites_manager,
             focus_handle,
         }
     }
@@ -384,6 +390,23 @@ impl FileManager {
         cx: &mut Context<Self>,
     ) {
         self.show_batch_rename(window, cx);
+    }
+
+    fn handle_add_to_favorites(
+        &mut self,
+        _: &AddToFavorites,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let current_path = self.active_panel_entity().read(cx).current_path();
+        let path_str = current_path.to_string_lossy().to_string();
+
+        let name = current_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| path_str.clone());
+
+        self.favorites_manager.add_favorite(name, path_str);
     }
 
     fn show_properties(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -964,6 +987,7 @@ impl Render for FileManager {
             .on_action(cx.listener(Self::handle_rename))
             .on_action(cx.listener(Self::handle_properties))
             .on_action(cx.listener(Self::handle_batch_rename))
+            .on_action(cx.listener(Self::handle_add_to_favorites))
             .on_action(cx.listener(Self::handle_exit))
             .on_action(cx.listener(Self::handle_show_filter))
             .on_action(cx.listener(Self::handle_clear_filter))

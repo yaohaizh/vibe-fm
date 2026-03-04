@@ -3,6 +3,7 @@
 
 mod batch_rename_dialog;
 mod drive_selector;
+mod favorites;
 mod file_entry;
 mod file_manager;
 mod file_ops;
