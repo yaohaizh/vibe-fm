@@ -4,6 +4,7 @@ use crate::file_ops;
 use crate::file_panel::{FilePanel, FilePanelEvent};
 use crate::filter_bar::{FilterBar, FilterBarEvent};
 use crate::function_bar::{FunctionBar, FunctionBarAction, FunctionBarEvent};
+use crate::rename_dialog::{RenameDialog, RenameDialogEvent};
 use crate::settings::AppSettings;
 use crate::settings_dialog::{SettingsDialog, SettingsDialogEvent};
 use crate::status_bar::{ActivePanel, StatusBar};
@@ -86,6 +87,7 @@ pub struct FileManager {
     function_bar: Entity<FunctionBar>,
     filter_bar: Entity<FilterBar>,
     settings_dialog: Entity<SettingsDialog>,
+    rename_dialog: Entity<RenameDialog>,
     left_drive_selector: Entity<DriveSelector>,
     right_drive_selector: Entity<DriveSelector>,
     active_panel: ActivePanel,
@@ -142,6 +144,7 @@ impl FileManager {
         let function_bar = cx.new(|_cx| FunctionBar::new());
         let filter_bar = cx.new(|cx| FilterBar::new(cx));
         let settings_dialog = cx.new(|cx| SettingsDialog::new(settings.clone(), cx));
+        let rename_dialog = cx.new(|cx| RenameDialog::new(cx));
         let left_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Left));
         let right_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Right));
 
@@ -155,6 +158,8 @@ impl FileManager {
         cx.subscribe(&filter_bar, Self::on_filter_bar_event)
             .detach();
         cx.subscribe(&settings_dialog, Self::on_settings_dialog_event)
+            .detach();
+        cx.subscribe(&rename_dialog, Self::on_rename_dialog_event)
             .detach();
         cx.subscribe(&left_drive_selector, Self::on_drive_selected)
             .detach();
@@ -193,6 +198,7 @@ impl FileManager {
             function_bar,
             filter_bar,
             settings_dialog,
+            rename_dialog,
             left_drive_selector,
             right_drive_selector,
             active_panel: ActivePanel::Left,
@@ -310,8 +316,8 @@ impl FileManager {
         self.move_selected(cx);
     }
 
-    fn handle_rename(&mut self, _: &Rename, _window: &mut Window, cx: &mut Context<Self>) {
-        self.rename_selected(cx);
+    fn handle_rename(&mut self, _: &Rename, window: &mut Window, cx: &mut Context<Self>) {
+        self.rename_selected(window, cx);
     }
 
     fn handle_exit(&mut self, _: &Exit, _window: &mut Window, cx: &mut Context<Self>) {
@@ -375,7 +381,9 @@ impl FileManager {
             FilePanelEvent::RequestDelete => self.delete_selected(cx),
             FilePanelEvent::RequestNewFolder => self.create_folder(cx),
             FilePanelEvent::RequestNewFile => self.create_file(cx),
-            FilePanelEvent::RequestRename => self.rename_selected(cx),
+            FilePanelEvent::RequestRename => {
+                cx.dispatch_action(&Rename);
+            }
             FilePanelEvent::RequestRefresh => self.refresh_panels(cx),
         }
     }
@@ -407,7 +415,9 @@ impl FileManager {
             FilePanelEvent::RequestDelete => self.delete_selected(cx),
             FilePanelEvent::RequestNewFolder => self.create_folder(cx),
             FilePanelEvent::RequestNewFile => self.create_file(cx),
-            FilePanelEvent::RequestRename => self.rename_selected(cx),
+            FilePanelEvent::RequestRename => {
+                cx.dispatch_action(&Rename);
+            }
             FilePanelEvent::RequestRefresh => self.refresh_panels(cx),
         }
     }
@@ -426,7 +436,9 @@ impl FileManager {
                 ToolbarAction::Delete => self.delete_selected(cx),
                 ToolbarAction::NewFolder => self.create_folder(cx),
                 ToolbarAction::NewFile => self.create_file(cx),
-                ToolbarAction::Rename => self.rename_selected(cx),
+                ToolbarAction::Rename => {
+                    cx.dispatch_action(&Rename);
+                }
                 ToolbarAction::Refresh => self.refresh_panels(cx),
                 ToolbarAction::ToggleHidden => self.toggle_hidden(cx),
                 ToolbarAction::SwapPanels => self.swap_panels(cx),
@@ -471,7 +483,9 @@ impl FileManager {
                 FunctionBarAction::Move => self.move_selected(cx),
                 FunctionBarAction::NewFolder => self.create_folder(cx),
                 FunctionBarAction::Delete => self.delete_selected(cx),
-                FunctionBarAction::Rename => self.rename_selected(cx),
+                FunctionBarAction::Rename => {
+                    cx.dispatch_action(&Rename);
+                }
                 FunctionBarAction::Exit => cx.quit(),
             },
         }
@@ -624,8 +638,13 @@ impl FileManager {
         });
     }
 
-    fn rename_selected(&mut self, _cx: &mut Context<Self>) {
-        // TODO: Implement rename dialog
+    fn rename_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let entries = self.active_panel_entity().read(cx).selected_entries();
+        if let Some(entry) = entries.first() {
+            self.rename_dialog.update(cx, |dialog, cx| {
+                dialog.show(entry.clone(), window, cx);
+            });
+        }
     }
 
     fn refresh_panels(&mut self, cx: &mut Context<Self>) {
@@ -745,6 +764,22 @@ impl FileManager {
                 self.apply_settings(new_settings.clone(), cx);
             }
             SettingsDialogEvent::Cancelled => {
+                // Nothing to do, dialog already closed
+            }
+        }
+    }
+
+    fn on_rename_dialog_event(
+        &mut self,
+        _dialog: Entity<RenameDialog>,
+        event: &RenameDialogEvent,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            RenameDialogEvent::Renamed(_, _) => {
+                self.refresh_panels(cx);
+            }
+            RenameDialogEvent::Cancelled => {
                 // Nothing to do, dialog already closed
             }
         }
@@ -899,6 +934,8 @@ impl Render for FileManager {
             .child(self.function_bar.clone())
             // Settings dialog overlay (rendered on top when visible)
             .child(self.settings_dialog.clone())
+            // Rename dialog overlay (rendered on top when visible)
+            .child(self.rename_dialog.clone())
     }
 }
 

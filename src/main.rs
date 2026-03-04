@@ -8,6 +8,7 @@ mod file_ops;
 mod file_panel;
 mod filter_bar;
 mod function_bar;
+mod rename_dialog;
 mod settings;
 mod settings_dialog;
 mod shell_context_menu;
