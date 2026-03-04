@@ -36,7 +36,7 @@ pub struct FilePanel {
     filtered_entries: Vec<FileEntry>,
     filter_text: String,
     selected_indices: Vec<usize>,
-    last_selected_index: Option<usize>, // For shift+click range selection
+    last_selected_index: Option<usize>,
     sort_column: SortColumn,
     sort_order: SortOrder,
     show_hidden: bool,
