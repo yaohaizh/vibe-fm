@@ -5,8 +5,10 @@ use crate::file_entry::{FileEntry, SortColumn, SortOrder};
 use crate::file_ops;
 use crate::file_panel::{FilePanel, FilePanelEvent};
 use crate::file_properties_dialog::{FilePropertiesDialog, FilePropertiesDialogEvent};
+use crate::file_viewer::{FileViewer, FileViewerEvent};
 use crate::filter_bar::{FilterBar, FilterBarEvent};
 use crate::function_bar::{FunctionBar, FunctionBarAction, FunctionBarEvent};
+use crate::progress_dialog::{ProgressDialog, ProgressDialogEvent};
 use crate::rename_dialog::{RenameDialog, RenameDialogEvent};
 use crate::settings::AppSettings;
 use crate::settings_dialog::{SettingsDialog, SettingsDialogEvent};
@@ -99,6 +101,8 @@ pub struct FileManager {
     rename_dialog: Entity<RenameDialog>,
     file_properties_dialog: Entity<FilePropertiesDialog>,
     batch_rename_dialog: Entity<BatchRenameDialog>,
+    file_viewer: Entity<FileViewer>,
+    progress_dialog: Entity<ProgressDialog>,
     left_drive_selector: Entity<DriveSelector>,
     right_drive_selector: Entity<DriveSelector>,
     active_panel: ActivePanel,
@@ -160,6 +164,8 @@ impl FileManager {
         let rename_dialog = cx.new(|cx| RenameDialog::new(cx));
         let file_properties_dialog = cx.new(|cx| FilePropertiesDialog::new(cx));
         let batch_rename_dialog = cx.new(|cx| BatchRenameDialog::new(cx));
+        let file_viewer = cx.new(|cx| FileViewer::new(cx));
+        let progress_dialog = cx.new(|cx| ProgressDialog::new(cx));
         let left_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Left));
         let right_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Right));
 
@@ -182,6 +188,10 @@ impl FileManager {
         )
         .detach();
         cx.subscribe(&batch_rename_dialog, Self::on_batch_rename_dialog_event)
+            .detach();
+        cx.subscribe(&file_viewer, Self::on_file_viewer_event)
+            .detach();
+        cx.subscribe(&progress_dialog, Self::on_progress_dialog_event)
             .detach();
         cx.subscribe(&left_drive_selector, Self::on_drive_selected)
             .detach();
@@ -223,6 +233,8 @@ impl FileManager {
             rename_dialog,
             file_properties_dialog,
             batch_rename_dialog,
+            file_viewer,
+            progress_dialog,
             left_drive_selector,
             right_drive_selector,
             active_panel: ActivePanel::Left,
@@ -329,12 +341,12 @@ impl FileManager {
         self.toggle_hidden(cx);
     }
 
-    fn handle_view(&mut self, _: &View, _window: &mut Window, cx: &mut Context<Self>) {
-        self.view_selected(cx);
+    fn handle_view(&mut self, _: &View, window: &mut Window, cx: &mut Context<Self>) {
+        self.view_selected(Some(window), cx);
     }
 
-    fn handle_edit(&mut self, _: &Edit, _window: &mut Window, cx: &mut Context<Self>) {
-        self.edit_selected(cx);
+    fn handle_edit(&mut self, _: &Edit, window: &mut Window, cx: &mut Context<Self>) {
+        self.edit_selected(Some(window), cx);
     }
 
     fn handle_move(&mut self, _: &Move, _window: &mut Window, cx: &mut Context<Self>) {
@@ -550,8 +562,8 @@ impl FileManager {
     ) {
         match event {
             FunctionBarEvent::Action(action) => match action {
-                FunctionBarAction::View => self.view_selected(cx),
-                FunctionBarAction::Edit => self.edit_selected(cx),
+                FunctionBarAction::View => self.view_selected(None, cx),
+                FunctionBarAction::Edit => self.edit_selected(None, cx),
                 FunctionBarAction::Copy => self.copy_to_other_panel(cx),
                 FunctionBarAction::Move => self.move_selected(cx),
                 FunctionBarAction::NewFolder => self.create_folder(cx),
@@ -754,19 +766,75 @@ impl FileManager {
         }
     }
 
-    fn view_selected(&mut self, cx: &mut Context<Self>) {
+    fn view_selected(&mut self, window: Option<&mut Window>, cx: &mut Context<Self>) {
         let entries = self.active_panel_entity().read(cx).selected_entries();
         if let Some(entry) = entries.first() {
-            if !entry.is_directory() {
+            if entry.is_directory() {
+                return;
+            }
+
+            let ext = entry.path.extension().and_then(|e| e.to_str());
+            let text_extensions = [
+                "txt",
+                "md",
+                "rs",
+                "js",
+                "ts",
+                "jsx",
+                "tsx",
+                "json",
+                "toml",
+                "yaml",
+                "yml",
+                "xml",
+                "html",
+                "css",
+                "scss",
+                "py",
+                "rb",
+                "php",
+                "c",
+                "cpp",
+                "h",
+                "hpp",
+                "go",
+                "java",
+                "sh",
+                "bash",
+                "zsh",
+                "ps1",
+                "bat",
+                "cmd",
+                "ini",
+                "conf",
+                "config",
+                "env",
+                "properties",
+                "log",
+                "sql",
+                "gitignore",
+                "dockerfile",
+            ];
+
+            if ext
+                .map(|e| text_extensions.contains(&e.to_lowercase().as_str()))
+                .unwrap_or(false)
+            {
+                if let Some(window) = window {
+                    self.file_viewer.update(cx, |viewer, cx| {
+                        viewer.show(entry.path.clone(), window, cx);
+                    });
+                } else {
+                    let _ = open::that(&entry.path);
+                }
+            } else {
                 let _ = open::that(&entry.path);
             }
         }
     }
 
-    fn edit_selected(&mut self, cx: &mut Context<Self>) {
-        // For now, edit behaves the same as view - opens with default application
-        // In the future, this could open with a specific editor
-        self.view_selected(cx);
+    fn edit_selected(&mut self, window: Option<&mut Window>, cx: &mut Context<Self>) {
+        self.view_selected(window, cx);
     }
 
     fn move_selected(&mut self, cx: &mut Context<Self>) {
@@ -883,6 +951,36 @@ impl FileManager {
             }
             BatchRenameDialogEvent::Cancelled => {
                 // Nothing to do, dialog already closed
+            }
+        }
+    }
+
+    fn on_file_viewer_event(
+        &mut self,
+        _dialog: Entity<FileViewer>,
+        event: &FileViewerEvent,
+        _cx: &mut Context<Self>,
+    ) {
+        match event {
+            FileViewerEvent::Closed => {
+                // Dialog already closed by the viewer itself
+            }
+        }
+    }
+
+    fn on_progress_dialog_event(
+        &mut self,
+        _dialog: Entity<ProgressDialog>,
+        event: &ProgressDialogEvent,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            ProgressDialogEvent::Completed => {
+                self.refresh_panels(cx);
+            }
+            ProgressDialogEvent::Cancelled => {
+                // Operation was cancelled, refresh panels
+                self.refresh_panels(cx);
             }
         }
     }
@@ -1045,6 +1143,10 @@ impl Render for FileManager {
             .child(self.file_properties_dialog.clone())
             // Batch rename dialog overlay (rendered on top when visible)
             .child(self.batch_rename_dialog.clone())
+            // File viewer dialog overlay (rendered on top when visible)
+            .child(self.file_viewer.clone())
+            // Progress dialog overlay (rendered on top when visible)
+            .child(self.progress_dialog.clone())
     }
 }
 
