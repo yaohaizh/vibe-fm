@@ -14,6 +14,7 @@ mod filter_bar;
 mod function_bar;
 mod progress_dialog;
 mod rename_dialog;
+mod search_dialog;
 mod settings;
 mod settings_dialog;
 mod shell_context_menu;
