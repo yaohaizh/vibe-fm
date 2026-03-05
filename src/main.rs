@@ -13,6 +13,7 @@ mod file_viewer;
 mod filter_bar;
 mod function_bar;
 mod progress_dialog;
+mod quick_filter_dialog;
 mod rename_dialog;
 mod search_dialog;
 mod settings;

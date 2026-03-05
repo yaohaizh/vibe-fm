@@ -9,6 +9,7 @@ use crate::file_viewer::{FileViewer, FileViewerEvent};
 use crate::filter_bar::{FilterBar, FilterBarEvent};
 use crate::function_bar::{FunctionBar, FunctionBarAction, FunctionBarEvent};
 use crate::progress_dialog::{ProgressDialog, ProgressDialogEvent};
+use crate::quick_filter_dialog::{QuickFilterDialog, QuickFilterDialogEvent};
 use crate::rename_dialog::{RenameDialog, RenameDialogEvent};
 use crate::search_dialog::{SearchDialog, SearchDialogEvent};
 use crate::settings::AppSettings;
@@ -54,6 +55,8 @@ actions!(
         ShowSettings,
         // Search
         Search,
+        // Quick Filter
+        QuickFilter,
     ]
 );
 
@@ -89,6 +92,8 @@ pub fn register_keybindings(cx: &mut App) {
         KeyBinding::new("ctrl-d", AddToFavorites, Some("FileManager")),
         // Search
         KeyBinding::new("alt-f7", Search, Some("FileManager")),
+        // Quick Filter
+        KeyBinding::new("ctrl-q", QuickFilter, Some("FileManager")),
         // Filter
         KeyBinding::new("ctrl-f", ShowFilter, Some("FileManager")),
         KeyBinding::new("escape", ClearFilter, Some("FileManager")),
@@ -109,6 +114,7 @@ pub struct FileManager {
     file_viewer: Entity<FileViewer>,
     progress_dialog: Entity<ProgressDialog>,
     search_dialog: Entity<SearchDialog>,
+    quick_filter_dialog: Entity<QuickFilterDialog>,
     left_drive_selector: Entity<DriveSelector>,
     right_drive_selector: Entity<DriveSelector>,
     active_panel: ActivePanel,
@@ -173,6 +179,7 @@ impl FileManager {
         let file_viewer = cx.new(|cx| FileViewer::new(cx));
         let progress_dialog = cx.new(|cx| ProgressDialog::new(cx));
         let search_dialog = cx.new(|cx| SearchDialog::new(cx));
+        let quick_filter_dialog = cx.new(|cx| QuickFilterDialog::new(cx));
         let left_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Left));
         let right_drive_selector = cx.new(|_cx| DriveSelector::new(PanelSide::Right));
 
@@ -201,6 +208,8 @@ impl FileManager {
         cx.subscribe(&progress_dialog, Self::on_progress_dialog_event)
             .detach();
         cx.subscribe(&search_dialog, Self::on_search_dialog_event)
+            .detach();
+        cx.subscribe(&quick_filter_dialog, Self::on_quick_filter_dialog_event)
             .detach();
         cx.subscribe(&left_drive_selector, Self::on_drive_selected)
             .detach();
@@ -245,6 +254,7 @@ impl FileManager {
             file_viewer,
             progress_dialog,
             search_dialog,
+            quick_filter_dialog,
             left_drive_selector,
             right_drive_selector,
             active_panel: ActivePanel::Left,
@@ -405,6 +415,17 @@ impl FileManager {
         let current_path = self.active_panel_entity().read(cx).current_path().clone();
         self.search_dialog.update(cx, |dialog, cx| {
             dialog.show(current_path, window, cx);
+        });
+    }
+
+    fn handle_quick_filter(
+        &mut self,
+        _: &QuickFilter,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.quick_filter_dialog.update(cx, |dialog, cx| {
+            dialog.show(window, cx);
         });
     }
 
@@ -1031,6 +1052,24 @@ impl FileManager {
         }
     }
 
+    fn on_quick_filter_dialog_event(
+        &mut self,
+        _dialog: Entity<QuickFilterDialog>,
+        event: &QuickFilterDialogEvent,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            QuickFilterDialogEvent::Closed => {
+                // Dialog already closed
+            }
+            QuickFilterDialogEvent::FilterApplied(filter_text) => {
+                self.active_panel_entity().update(cx, |panel, cx| {
+                    panel.set_filter(filter_text.clone(), cx);
+                });
+            }
+        }
+    }
+
     fn apply_settings(&mut self, mut settings: AppSettings, cx: &mut Context<Self>) {
         // Save current paths if remember_last_paths is enabled
         if settings.remember_last_paths {
@@ -1137,6 +1176,7 @@ impl Render for FileManager {
             .on_action(cx.listener(Self::handle_clear_filter))
             .on_action(cx.listener(Self::handle_show_settings))
             .on_action(cx.listener(Self::handle_search))
+            .on_action(cx.listener(Self::handle_quick_filter))
             .track_focus(&self.focus_handle)
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
@@ -1196,6 +1236,8 @@ impl Render for FileManager {
             .child(self.progress_dialog.clone())
             // Search dialog overlay (rendered on top when visible)
             .child(self.search_dialog.clone())
+            // Quick filter dialog overlay (rendered on top when visible)
+            .child(self.quick_filter_dialog.clone())
     }
 }
 

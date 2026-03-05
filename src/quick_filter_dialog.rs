@@ -1,20 +1,11 @@
 use gpui::*;
 use gpui_component::dialog::{Dialog, DialogButtonProps};
-use gpui_component::{h_flex, v_flex, ActiveTheme, IconName, StyledExt};
+use gpui_component::{h_flex, v_flex, ActiveTheme, IconName};
 
 pub struct QuickFilterDialog {
     visible: bool,
     filter_text: String,
-    filter_type: FilterType,
     focus_handle: FocusHandle,
-}
-
-#[derive(Clone)]
-pub enum FilterType {
-    All,
-    Files,
-    Directories,
-    Custom(String),
 }
 
 pub enum QuickFilterDialogEvent {
@@ -29,14 +20,12 @@ impl QuickFilterDialog {
         Self {
             visible: false,
             filter_text: String::new(),
-            filter_type: FilterType::All,
             focus_handle: cx.focus_handle(),
         }
     }
 
     pub fn show(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.filter_text = String::new();
-        self.filter_type = FilterType::All;
         self.visible = true;
         self.focus_handle.focus(window);
         cx.notify();
@@ -45,18 +34,6 @@ impl QuickFilterDialog {
     pub fn hide(&mut self, cx: &mut Context<Self>) {
         self.visible = false;
         cx.notify();
-    }
-
-    pub fn is_visible(&self) -> bool {
-        self.visible
-    }
-
-    pub fn set_filter_text(&mut self, text: String) {
-        self.filter_text = text;
-    }
-
-    pub fn get_filter_text(&self) -> &str {
-        &self.filter_text
     }
 }
 
@@ -73,7 +50,7 @@ impl Render for QuickFilterDialog {
                 h_flex()
                     .gap_2()
                     .items_center()
-                    .child(IconName::Filter)
+                    .child(IconName::Search)
                     .child("Quick Filter"),
             )
             .w(px(350.))
@@ -94,11 +71,11 @@ impl Render for QuickFilterDialog {
             })
             .on_ok({
                 let this = cx.entity().clone();
+                let filter_text = filter_text.clone();
                 move |_, _, cx| {
-                    let filter_text = this.read(cx).filter_text.clone();
                     let _ = this.update(cx, |dialog, cx| {
                         dialog.hide(cx);
-                        cx.emit(QuickFilterDialogEvent::FilterApplied(filter_text));
+                        cx.emit(QuickFilterDialogEvent::FilterApplied(filter_text.clone()));
                     });
                     true
                 }
@@ -120,47 +97,18 @@ impl Render for QuickFilterDialog {
                             .child("Leave empty to show all files"),
                     )
                     .child(
-                        h_flex()
-                            .gap_2()
-                            .items_center()
-                            .child(IconName::Search)
-                            .child(
-                                gpui::TextArea::new("filter-input")
-                                    .placeholder("Filter pattern...")
-                                    .value(filter_text)
-                                    .on_change({
-                                        let this = cx.entity().clone();
-                                        move |cx, _, value| {
-                                            this.update(cx, |dialog, _| {
-                                                dialog.filter_text = value;
-                                            })
-                                            .ok();
-                                        }
-                                    }),
-                            ),
-                    )
-                    .child(
-                        v_flex()
-                            .gap_2()
+                        div()
+                            .p_2()
+                            .rounded_md()
+                            .bg(cx.theme().secondary)
+                            .text_color(cx.theme().foreground)
                             .text_sm()
-                            .child(
-                                div()
-                                    .text_color(cx.theme().foreground)
-                                    .child("Quick filters:"),
-                            )
-                            .child(
-                                div()
-                                    .p_2()
-                                    .rounded_md()
-                                    .bg(cx.theme().secondary)
-                                    .text_color(cx.theme().foreground)
-                                    .children(vec![
-                                        div().child("* - Show all"),
-                                        div().child("*.ext - Files with extension"),
-                                        div().child("name* - Starts with name"),
-                                        div().child("*name* - Contains name"),
-                                    ]),
-                            ),
+                            .children(vec![
+                                div().child("* - Show all"),
+                                div().child("*.ext - Files with extension"),
+                                div().child("name* - Starts with name"),
+                                div().child("*name* - Contains name"),
+                            ]),
                     ),
             )
             .into_any_element()
