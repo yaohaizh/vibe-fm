@@ -90,6 +90,8 @@ pub fn register_keybindings(cx: &mut App) {
         KeyBinding::new("alt-enter", Properties, Some("FileManager")),
         KeyBinding::new("ctrl-m", BatchRename, Some("FileManager")),
         KeyBinding::new("ctrl-d", AddToFavorites, Some("FileManager")),
+        // Settings
+        KeyBinding::new("ctrl-comma", ShowSettings, Some("FileManager")),
         // Search
         KeyBinding::new("alt-f7", Search, Some("FileManager")),
         // Quick Filter
